@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO, emit
 import sqlite3
@@ -20,7 +22,7 @@ if not API_KEY:
 client = genai.Client(api_key=API_KEY)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret_key_he_thong_dvc!'
-socketio = SocketIO(app)
+socketio = SocketIO(app,async_mode="eventlet")
 
 
 DB_FILE = "hethong_dichvucong.db"
