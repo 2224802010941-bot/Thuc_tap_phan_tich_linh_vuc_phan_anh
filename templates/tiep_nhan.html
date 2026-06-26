@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-6">
+    <div class="mb-8 border-b pb-4">
+        <h1 class="text-3xl font-bold text-gray-800">📥 Hồ sơ chờ tiếp nhận</h1>
+        <p class="text-gray-600 mt-2">Duyệt và điều phối các phản ánh từ hệ thống AI.</p>
+    </div>
+
+    {% if list_cho_tiep_nhan %}
+    <div class="grid grid-cols-1 gap-6">
+        {% for row in list_cho_tiep_nhan %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Phản ánh #{{ row[0] }}</span>
+                    <span class="text-xs text-gray-400">Trạng thái: {{ row[4] }}</span>
+                </div>
+                
+                <p class="text-gray-700 text-base leading-relaxed mb-6">{{ row[1] }}</p>
+
+                <div class="bg-gray-50 border-l-4 border-indigo-500 p-4 rounded-r-lg mb-6">
+                    <h3 class="text-sm font-bold text-indigo-900 uppercase tracking-wide">🤖 Phân tích bởi AI</h3>
+                    <div class="mt-2 grid grid-cols-2 gap-4 text-sm">
+                        <p class="text-gray-700">Lĩnh vực: <span class="font-semibold">{{ row[2] }}</span></p>
+                        <p class="text-gray-700">Độ khẩn: <span class="text-red-500 font-semibold">{{ row[3] }}</span></p>
+                    </div>
+                </div>
+<form action="{{ url_for('duyet_ho_so') }}" method="POST" data-auto-submit="1" class="flex items-center gap-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+    <input type="hidden" name="pa_id" value="{{ row[0] }}">
+    <input type="hidden" name="linh_vuc_duyet" value="{{ row[2] }}">
+    <input type="hidden" name="do_khan_duyet" value="{{ row[3] }}">
+    
+    <input type="hidden" name="phong_ban_duyet" value="{{ row[6] }}">
+    
+    <div class="flex-1">
+        <p class="text-sm font-bold text-blue-800 uppercase">🤖 AI đề xuất điều phối:</p>
+        <p class="text-lg font-semibold text-blue-900">{{ row[5] if row[5] else "Chưa xác định phòng ban" }}</p>
+    </div>
+
+    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors">
+        Duyệt & Chuyển phòng
+    </button>
+</form>
+
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        // Auto duyệt sau 7s cho từng form (mỗi đơn 1 form). Nếu đã submit thì hủy auto.
+        (function () {
+            const timeoutMs = 7000;
+
+            const forms = document.querySelectorAll('form[data-auto-submit="1"]');
+            forms.forEach((formEl) => {
+                let alreadySubmitted = false;
+                formEl.addEventListener('submit', function () {
+                    alreadySubmitted = true;
+                }, { once: true });
+
+                setTimeout(function () {
+                    if (alreadySubmitted) return;
+
+                    const phongBanInput = formEl.querySelector('input[name="phong_ban_duyet"]');
+                    if (phongBanInput) {
+                        const v = (phongBanInput.value || '').trim();
+                        if (!v || v === 'None' || v === 'null') {
+                            // Phòng tiếp dân (mặc định) trong init_db là dòng cuối cùng.
+                            // Seed hiện tại cho 8 dòng -> id = 8.
+                            phongBanInput.value = '8';
+                        }
+                    }
+
+                    formEl.submit();
+                }, timeoutMs);
+            });
+        })();
+    </script>
+    
+    {% else %}
+    <div class="text-center py-20">
+        <div class="text-6xl mb-4">✅</div>
+        <h2 class="text-xl font-medium text-gray-500">Tất cả hồ sơ đã được xử lý!</h2>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

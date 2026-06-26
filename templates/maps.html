@@ -1,0 +1,269 @@
+{% extends "layout.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.heat/dist/leaflet-heat.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+<div class="space-y-5">
+  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Bản đồ phản ánh (GIS)</h1>
+      <p class="text-sm text-gray-500 mt-1">Hiển thị marker và heatmap theo dữ liệu có lat/lng trong DB.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/treemap" class="inline-flex items-center justify-center rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Treemap</a>
+      <a href="/maps" class="inline-flex items-center justify-center rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">GIS</a>
+    </div>
+  </div>
+
+
+  <!-- UI lọc đơn giản -->
+  <form id="filter-form" class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm" onsubmit="applyFilter(false); return false;">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Từ ngày</label>
+        <input type="date" id="date_from" name="date_from" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Đến ngày</label>
+        <input type="date" id="date_to" name="date_to" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Lĩnh vực</label>
+        <select id="linh_vuc" name="linh_vuc" class="w-full border border-gray-200 rounded px-3 py-2 text-sm">
+          <option value="">Tất cả</option>
+          <option value="Hạ tầng đô thị">Hạ tầng đô thị</option>
+          <option value="Trật tự đô thị">Trật tự đô thị</option>
+          <option value="Tiếng ồn">Tiếng ồn</option>
+          <option value="Xe buýt">Xe buýt</option>
+          <option value="Kinh tế, hạ tầng và đô thị">Kinh tế, hạ tầng và đô thị</option>
+          <option value="Văn hóa xã hội">Văn hóa xã hội</option>
+          <option value="Giáo dục">Giáo dục</option>
+          <option value="Môi trường">Môi trường</option>
+          <option value="Lĩnh vực khác">Lĩnh vực khác</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Phòng ban</label>
+        <input type="text" id="phong_ban_id" name="phong_ban_id" placeholder="(tùy chọn) id" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+    </div>
+
+    <div class="flex gap-2 mt-4">
+      <button type="submit" class="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+        Áp dụng
+      </button>
+      <button type="button" class="inline-flex items-center justify-center rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" onclick="resetFilter();">
+        Xóa lọc
+      </button>
+    </div>
+  </form>
+
+  <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+    <div class="p-3 border-b border-gray-100 flex items-center justify-between">
+      <div class="text-sm font-semibold text-gray-800">🗺️ Khu vực</div>
+      <div class="text-xs text-gray-500" id="points-hint">Đang tải...</div>
+    </div>
+
+    <div class="relative">
+      <div id="map" style="height: 560px;" class="w-full"></div>
+
+
+      <!-- Legend heatmap (GIS) -->
+      <div class="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur border border-gray-200 rounded-lg shadow-sm p-3 w-[190px]">
+        <div class="text-xs font-bold text-gray-800 mb-2">Heatmap (độ khẩn cấp)</div>
+        <div class="space-y-2 text-[12px] text-gray-700">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded-full" style="background: rgba(37,99,235,0.40); border:1px solid #2563eb;"></span>
+            <span>1 - Thấp</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded-full" style="background: rgba(245,158,11,0.45); border:1px solid #f59e0b;"></span>
+            <span>3 - Trung</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded-full" style="background: rgba(239,68,68,0.45); border:1px solid #ef4444;"></span>
+            <span>4-5 - Cao</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let map;
+  let markerLayer;
+  let heatLayer;
+
+  function buildUrl(params) {
+    const usp = new URLSearchParams();
+    for (const [k,v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      const s = String(v).trim();
+      if (!s) continue;
+      usp.set(k, s);
+    }
+    const qs = usp.toString();
+    return '/api/phan_anh/points' + (qs ? ('?' + qs) : '');
+  }
+
+  async function loadPoints(params) {
+    const url = buildUrl(params);
+    document.getElementById('points-hint').innerText = 'Đang tải dữ liệu...';
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const data = await res.json();
+    return data;
+  }
+
+  function resetMap() {
+    if (markerLayer) markerLayer.clearLayers();
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+  }
+
+  function toHeatPoints(points) {
+    // leaflet.heat: [lat, lng, intensity]
+    return points.map(p => [p.lat, p.lng, Math.max(1, p.do_khan_cap || 1)]);
+  }
+
+  function colorForIntensity(intensity) {
+    const v = Number(intensity || 1);
+    if (v >= 4) return 'red';
+    if (v === 3) return 'orange';
+    return 'blue';
+  }
+
+  function getIconHtml(intensity) {
+    const c = colorForIntensity(intensity);
+    const border = c === 'red' ? '#ef4444' : (c === 'orange' ? '#f59e0b' : '#2563eb');
+    const bg = c === 'red' ? 'rgba(239,68,68,0.18)' : (c === 'orange' ? 'rgba(245,158,11,0.18)' : 'rgba(37,99,235,0.18)');
+    // Làm marker nổi bật hơn: tăng độ đậm nền + thêm viền và glow nhẹ.
+    return `
+      <div style="width:20px;height:20px;border-radius:10px; background:${bg}; border:3px solid ${border}; box-shadow:0 6px 14px rgba(0,0,0,0.18); position:relative;">
+        <div style="position:absolute; inset:2px; border-radius:9px; background:${c}; opacity:0.95;"></div>
+        <div style="position:absolute; inset:0px; border-radius:10px; box-shadow:0 0 0 2px rgba(255,255,255,0.12) inset;"></div>
+      </div>
+
+    `;
+  }
+
+  async function applyFilter(fromInit) {
+    if (!map) return;
+
+    const date_from = document.getElementById('date_from').value;
+    const date_to = document.getElementById('date_to').value;
+    const linh_vuc = document.getElementById('linh_vuc').value;
+    const phong_ban_id = document.getElementById('phong_ban_id').value;
+
+    // Nếu có phong_ban_id nhưng không phải số => bỏ
+    let pb = '';
+    if (phong_ban_id && !isNaN(Number(phong_ban_id))) pb = String(Math.trunc(Number(phong_ban_id)));
+
+    resetMap();
+
+    const params = {
+      date_from,
+      date_to,
+      linh_vuc,
+      phong_ban_id: pb
+    };
+
+    const points = await loadPoints(params);
+
+    document.getElementById('points-hint').innerText = `Tải xong: ${points.length} điểm`;
+
+    const bounds = [];
+
+    // markers
+    markerLayer = markerLayer || L.layerGroup().addTo(map);
+
+    // Không gom cụm/không chia ô lưới: mỗi phản ánh hiển thị 1 marker tại tọa độ thật.
+    for (const p of points.slice(0, 180)) {
+      let lat = Number(p.lat);
+      let lng = Number(p.lng);
+      if (!isFinite(lat) || !isFinite(lng)) continue;
+
+      // Không gom cụm để giữ đủ địa điểm.
+      // Chỉ jitter cực nhỏ để giảm chồng tuyệt đối khi tọa độ trùng nhau.
+      const i = points.indexOf(p);
+      const jitterKm = 0.002; // ~2-3m (rất nhỏ)
+      const jitterDegLat = (jitterKm / 110.574);
+      const jitterDegLng = (jitterKm / (111.320 * Math.cos(lat * Math.PI/180)));
+      const dx = ((i % 3) - 1) * jitterDegLng;
+      const dy = (Math.floor(i / 3) % 3 - 1) * jitterDegLat;
+      lat = lat + dy;
+      lng = lng + dx;
+
+
+      const doKhanCap = Number(p.do_khan_cap || 1);
+      bounds.push([lat, lng]);
+
+      const iconHtml = getIconHtml(doKhanCap);
+      const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [18, 18] });
+      const marker = L.marker([lat, lng], { icon });
+
+
+      const safeNoiDung = String(p.noi_dung || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/"/g, '"')
+        .replace(/'/g, '&#039;');
+
+      const popupHtml = `
+        <div style="max-width: 320px;">
+          <div style="font-weight:800; margin-bottom:6px;">#${p.id} • ${doKhanCap}</div>
+          <div style="font-size:12px; margin-bottom:8px; color:#374151;">${p.linh_vuc || ''}</div>
+          <div style="font-size:12px; margin-bottom:8px; color:#6b7280;">${p.ngay_gui || ''}</div>
+          <div style="font-size:13px; margin-top:4px; line-height:1.35;">${safeNoiDung}</div>
+          <div style="font-size:12px; color:#374151; margin-top:10px;"><b>📍</b> ${p.dia_chi || ''}</div>
+        </div>
+      `;
+
+      marker.bindPopup(popupHtml);
+      markerLayer.addLayer(marker);
+    }
+
+
+    // heat
+    if (points.length > 0) {
+      heatLayer = L.heatLayer(toHeatPoints(points), {
+        radius: 20,
+        blur: 18,
+        maxZoom: 14
+      }).addTo(map);
+    }
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [20, 20] });
+    } else {
+      map.setView([21.0278, 105.8342], 12);
+    }
+  }
+
+  function resetFilter() {
+    document.getElementById('date_from').value = '';
+    document.getElementById('date_to').value = '';
+    document.getElementById('linh_vuc').value = '';
+    document.getElementById('phong_ban_id').value = '';
+    applyFilter(true);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    map = L.map('map', { zoomControl: true }).setView([21.0278, 105.8342], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    markerLayer = L.layerGroup().addTo(map);
+
+    applyFilter(true);
+
+    // Nếu muốn lưu filter trên query string, có thể bổ sung sau.
+  });
+</script>
+{% endblock %}
+
+

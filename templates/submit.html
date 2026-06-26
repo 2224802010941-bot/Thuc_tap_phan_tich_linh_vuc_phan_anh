@@ -1,0 +1,177 @@
+{% extends "layout.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md mt-6 border border-gray-200">
+    <div class="bg-blue-700 text-white p-4 rounded-t-lg -mx-8 -mt-8 mb-6 font-bold text-lg">
+        🏛️ GỬI PHẢN ÁNH KIẾN NGHỊ
+    </div>
+    
+    {% if success %}
+    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+        🎉 Hệ thống tiếp nhận thành công! .
+    </div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-5">
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Nội dung phản ánh <span class="text-red-500">*</span></label>
+            <textarea name="noi_dung" rows="4" class="w-full border border-gray-300 p-2.5 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Vui lòng nhập chi tiết nội dung cần phản ánh *" required></textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Tài liệu đính kèm (Hỗ trợ word, pdf, png, jpg, mp4)</label>
+            <input type="file" name="file_dinh_kem" accept=".doc,.docx,.pdf,image/*,video/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer">
+        </div>
+
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Địa điểm xảy ra sự việc <span class="text-red-500">*</span></label>
+            <div class="flex gap-2">
+                <input type="text" id="dia_chi" name="dia_chi" class="flex-1 border border-gray-300 p-2.5 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Vui lòng nhập chi tiết địa chỉ hoặc bấm nút Chọn vị trí..." required>
+                
+                <button type="button" onclick="openMapModal()" class="bg-blue-50 text-blue-700 border border-blue-300 px-4 py-2.5 rounded text-sm font-medium hover:bg-blue-100 flex items-center space-x-1 whitespace-nowrap">
+                    <span>📍</span> <span>Chọn vị trí</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Tên người gửi <span class="text-red-500">*</span></label>
+                <input type="text" name="ten_nguoi_gui" class="w-full border border-gray-300 p-2.5 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nhập họ và tên *" required>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Số điện thoại <span class="text-red-500">*</span></label>
+                <input type="text" name="sdt" class="w-full border border-gray-300 p-2.5 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nhập số điện thoại *" required>
+            </div>
+        </div>
+
+        <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 transition duration-200">Gửi Phản Ánh</button>
+    </form>
+</div>
+
+<div id="mapModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[550px]">
+        <div class="bg-gray-100 p-3 border-b border-gray-200 flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-gray-700 text-sm">📍 Tìm kiếm và chọn vị trí chính xác trên bản đồ</h3>
+                <button onclick="closeMapModal()" class="text-gray-500 hover:text-gray-700 font-bold text-lg">✕</button>
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="search_map_input" placeholder="Gõ số nhà, tên đường, tên phường để tìm nhanh..." class="flex-1 border border-gray-300 p-2 rounded text-xs outline-none focus:border-blue-500 shadow-sm" onkeypress="if(event.key === 'Enter') searchLocationOnMap()">
+                <button type="button" onclick="searchLocationOnMap()" class="bg-blue-600 text-white text-xs px-4 py-2 rounded font-bold hover:bg-blue-700 shadow-sm">Tìm kiếm</button>
+            </div>
+        </div>
+        
+        <div id="map" class="flex-1 w-full bg-gray-100"></div>
+        
+        <div class="p-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+            <p class="text-[11px] text-gray-500">💡 Mẹo: Bản đồ tự định vị nơi bạn đứng. Bạn có thể gõ tìm kiếm hoặc click chuột trực tiếp để dời ghim.</p>
+            <button onclick="closeMapModal()" class="bg-blue-600 text-white px-5 py-2 rounded text-xs font-bold hover:bg-blue-700 transition shrink-0">Xác Nhận Vị Trí</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let map;
+    let marker;
+    let currentLat = null;
+    let currentLng = null;
+
+    function openMapModal() {
+        document.getElementById('mapModal').classList.remove('hidden');
+        
+        if (!map) {
+            // Mặc định ban đầu (Tâm TP.HCM)
+            currentLat = 10.762622;
+            currentLng = 106.660172;
+
+            map = L.map('map').setView([currentLat, currentLng], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Tự động định vị GPS của người dùng
+            map.locate({setView: true, maxZoom: 17});
+
+            // Nếu lấy được vị trí GPS thành công
+            map.on('locationfound', function(e) {
+                currentLat = e.latlng.lat;
+                currentLng = e.latlng.lng;
+                
+                if (marker) {
+                    marker.setLatLng(e.latlng);
+                } else {
+                    marker = L.marker(e.latlng).addTo(map);
+                }
+            });
+
+            // Người dùng click chọn vị trí bất kỳ trên bản đồ
+            map.on('click', function(e) {
+                currentLat = e.latlng.lat;
+                currentLng = e.latlng.lng;
+
+                if (marker) {
+                    marker.setLatLng(e.latlng);
+                } else {
+                    marker = L.marker(e.latlng).addTo(map);
+                }
+            });
+        }
+        
+        setTimeout(() => { map.invalidateSize(); }, 250);
+    }
+
+    // CẢI TIẾN: Khi bấm nút "Xác Nhận Vị Trí", hệ thống mới bắt đầu gọi API dịch địa chỉ để tránh bị sót
+    function closeMapModal() {
+        if (currentLat && currentLng) {
+            // Hiển thị trạng thái đang tải trong ô nhập liệu để người dùng biết
+            document.getElementById('dia_chi').value = "Đang lấy địa chỉ từ bản đồ...";
+            
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}&accept-language=vi`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.display_name) {
+                        // Đổ dữ liệu địa chỉ chữ ra ô input ở form chính
+                        document.getElementById('dia_chi').value = data.display_name;
+                    } else {
+                        document.getElementById('dia_chi').value = `${currentLat}, ${currentLng}`;
+                    }
+                })
+                .catch(err => {
+                    console.error("Lỗi: ", err);
+                    document.getElementById('dia_chi').value = `${currentLat}, ${currentLng}`;
+                });
+        }
+        document.getElementById('mapModal').classList.add('hidden');
+    }
+
+    // Hàm xử lý khi gõ tìm kiếm địa chỉ
+    function searchLocationOnMap() {
+        const query = document.getElementById('search_map_input').value;
+        if (!query) return;
+
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=vi`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    currentLat = parseFloat(data[0].lat);
+                    currentLng = parseFloat(data[0].lon);
+                    
+                    map.setView([currentLat, currentLng], 17);
+                    
+                    if (marker) {
+                        marker.setLatLng([currentLat, currentLng]);
+                    } else {
+                        marker = L.marker([currentLat, currentLng]).addTo(map);
+                    }
+                } else {
+                    alert("Không tìm thấy kết quả phù hợp!");
+                }
+            })
+            .catch(err => console.error("Lỗi tìm kiếm: ", err));
+    }
+</script>
+{% endblock %}

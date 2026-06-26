@@ -1,0 +1,276 @@
+{% extends "layout.html" %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+<div class="space-y-5">
+  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Bản đồ cây (Treemap)</h1>
+      <p class="text-sm text-gray-500 mt-1">Diện tích hình chữ nhật tỉ lệ theo số lượng phản ánh (PAKN) theo phường/xã.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/maps" class="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">GIS</a>
+    </div>
+  </div>
+
+  <form id="filter-form" class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm" onsubmit="applyFilter(); return false;">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Từ ngày</label>
+        <input type="date" id="date_from" name="date_from" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Đến ngày</label>
+        <input type="date" id="date_to" name="date_to" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Lĩnh vực</label>
+        <select id="linh_vuc" name="linh_vuc" class="w-full border border-gray-200 rounded px-3 py-2 text-sm">
+          <option value="">Tất cả</option>
+          <option value="Hạ tầng đô thị">Hạ tầng đô thị</option>
+          <option value="Trật tự đô thị">Trật tự đô thị</option>
+          <option value="Tiếng ồn">Tiếng ồn</option>
+          <option value="Xe buýt">Xe buýt</option>
+          <option value="Kinh tế, hạ tầng và đô thị">Kinh tế, hạ tầng và đô thị</option>
+          <option value="Văn hóa xã hội">Văn hóa xã hội</option>
+          <option value="Giáo dục">Giáo dục</option>
+          <option value="Môi trường">Môi trường</option>
+          <option value="Lĩnh vực khác">Lĩnh vực khác</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Phòng ban (id)</label>
+        <input type="text" id="phong_ban_id" name="phong_ban_id" placeholder="(tùy chọn) id" class="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+      </div>
+    </div>
+
+    <div class="flex gap-2 mt-4">
+      <button type="submit" class="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Áp dụng</button>
+      <button type="button" class="inline-flex items-center justify-center rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" onclick="resetFilter();">Xóa lọc</button>
+    </div>
+  </form>
+
+  <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+    <div class="p-3 border-b border-gray-100 flex items-center justify-between">
+      <div class="text-sm font-semibold text-gray-800">📌 Treemap (parent=nhóm mức độ, child=phường/xã)</div>
+      <div class="text-xs text-gray-500" id="treemap-hint">Đang tải...</div>
+    </div>
+
+    <div class="relative">
+      <div id="treemap" style="height: 620px;" class="w-full"></div>
+
+      <div class="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur border border-gray-200 rounded-lg shadow-sm p-3 w-[220px]">
+        <div class="text-xs font-bold text-gray-800 mb-2">Chú giải mức độ</div>
+        <div class="space-y-2 text-[12px] text-gray-700">
+          <div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded" style="background:#ef4444"></span><span>Số lượng PAKN rất cao</span></div>
+          <div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded" style="background:#f59e0b"></span><span>Số lượng PAKN cao</span></div>
+          <div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded" style="background:#22c55e"></span><span>Số lượng PAKN trung bình</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+    <h2 class="text-base font-bold text-gray-800 mb-2">Chi tiết</h2>
+    <div class="text-sm text-gray-600" id="detail-box">Click vào một ô để xem.</div>
+  </div>
+</div>
+
+<script>
+  const apiUrl = '/api/phan_anh/treemap';
+
+  function buildUrl(params) {
+    const usp = new URLSearchParams();
+    for (const [k,v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      const s = String(v).trim();
+      if (!s) continue;
+      usp.set(k, s);
+    }
+    const qs = usp.toString();
+    return apiUrl + (qs ? ('?' + qs) : '');
+  }
+
+  function resetFilter() {
+    document.getElementById('date_from').value = '';
+    document.getElementById('date_to').value = '';
+    document.getElementById('linh_vuc').value = '';
+    document.getElementById('phong_ban_id').value = '';
+    applyFilter();
+  }
+
+  function parsePhuongBanId() {
+    const v = document.getElementById('phong_ban_id').value;
+    if (!v) return '';
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return String(Math.trunc(n));
+    return '';
+  }
+
+  async function applyFilter() {
+    const date_from = document.getElementById('date_from').value;
+    const date_to = document.getElementById('date_to').value;
+    const linh_vuc = document.getElementById('linh_vuc').value;
+    const phong_ban_id = parsePhuongBanId();
+
+    document.getElementById('treemap-hint').innerText = 'Đang tải...';
+    document.getElementById('detail-box').innerText = 'Click vào một ô để xem.';
+
+    const url = buildUrl({ date_from, date_to, linh_vuc, phong_ban_id });
+    const res = await fetch(url);
+    const data = await res.json();
+
+    renderTreemap(data);
+  }
+
+  function renderTreemap(data) {
+    const holder = document.getElementById('treemap');
+    holder.innerHTML = '';
+
+    const hint = document.getElementById('treemap-hint');
+    const detailBox = document.getElementById('detail-box');
+
+    const parents = data.parents || [];
+    const children = data.children || [];
+
+    const totalUnits = data.raw?.total_units ?? (children.length || 0);
+    hint.innerText = `Tổng ${totalUnits} phường/xã.`;
+
+    if (!parents.length || !children.length) {
+      holder.innerHTML = `<div class="p-6 text-center text-sm text-gray-500">Không có dữ liệu phù hợp bộ lọc.</div>`;
+      return;
+    }
+
+    const width = holder.clientWidth;
+    const height = holder.clientHeight;
+
+    const margin = 6;
+
+    const svg = d3.select(holder)
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    // Draw rectangles in two layers: parents then children.
+    // For layout: we run treemap twice? Simplify:
+    // - Compute layout for parent groups using summed values
+    // - Inside each parent rectangle, compute layout for its child items
+
+    const parentTreemap = d3.treemap()
+      .size([width, height])
+      .paddingInner(2)
+      .paddingOuter(0);
+
+    const parentRoot = d3.hierarchy({ children: parents })
+      .sum(d => d.value);
+
+    parentTreemap(parentRoot);
+
+    const childByParent = {};
+    for (const c of children) {
+      childByParent[c.parent] = childByParent[c.parent] || [];
+      childByParent[c.parent].push(c);
+    }
+
+    // Parent layer
+    const gParents = svg.append('g');
+    gParents.selectAll('rect')
+      .data(parentRoot.leaves())
+      .enter()
+      .append('rect')
+      .attr('x', d => d.x0)
+      .attr('y', d => d.y0)
+      .attr('width', d => d.x1 - d.x0)
+      .attr('height', d => d.y1 - d.y0)
+      .attr('fill', d => d.data.color)
+      .attr('fill-opacity', 0.18)
+      .attr('stroke', d => d.data.color)
+      .attr('stroke-width', 1);
+
+    // Parent labels (optional)
+    gParents.selectAll('text')
+      .data(parentRoot.leaves())
+      .enter()
+      .append('text')
+      .attr('x', d => d.x0 + 4)
+      .attr('y', d => d.y0 + 16)
+      .text(d => d.data.name)
+      .attr('font-size', '12px')
+      .attr('fill', '#111827')
+      .attr('opacity', 0.85);
+
+    const gChildren = svg.append('g');
+
+    for (const parentNode of parentRoot.leaves()) {
+      const parentName = parentNode.data.name;
+      const pChildren = childByParent[parentName] || [];
+      if (!pChildren.length) continue;
+
+      const w = (parentNode.x1 - parentNode.x0);
+      const h = (parentNode.y1 - parentNode.y0);
+      if (w <= 0 || h <= 0) continue;
+
+      const localRoot = d3.hierarchy({ children: pChildren })
+        .sum(d => d.value);
+
+      const localTreemap = d3.treemap()
+        .size([w, h])
+        .paddingInner(1)
+        .paddingOuter(0);
+
+      localTreemap(localRoot);
+
+      const cells = localRoot.leaves();
+
+      // Create a dedicated group per parent to keep D3 joins stable.
+      const parentGroup = gChildren.append('g').attr('data-parent', parentName);
+
+      parentGroup.selectAll('rect')
+        .data(cells)
+        .enter()
+        .append('rect')
+        .attr('x', d => parentNode.x0 + d.x0)
+        .attr('y', d => parentNode.y0 + d.y0)
+        .attr('width', d => d.x1 - d.x0)
+        .attr('height', d => d.y1 - d.y0)
+        .attr('fill', d => d.data.color)
+        .attr('fill-opacity', 0.55)
+        .attr('stroke', d => d.data.color)
+        .attr('stroke-width', 1)
+        .on('click', function(event, d) {
+          const name = d.data.name;
+          const value = d.data.value;
+          const parent = d.data.parent;
+          detailBox.innerHTML = `
+            <div class="text-sm text-gray-800 font-semibold">${name}</div>
+            <div class="text-sm text-gray-600">Nhóm: ${parent}</div>
+            <div class="text-sm text-gray-900 font-bold">Số lượng PAKN: ${value}</div>
+          `;
+        })
+        .append('title')
+        .text(d => `${d.data.name}: ${d.data.value}`);
+
+      parentGroup.selectAll('text')
+        .data(cells.filter(d => (d.x1 - d.x0) > 90 && (d.y1 - d.x0) > 40))
+        .enter()
+        .append('text')
+        .attr('x', d => parentNode.x0 + d.x0 + 4)
+        .attr('y', d => parentNode.y0 + d.y0 + 16)
+        .text(d => d.data.name)
+        .attr('font-size', '12px')
+        .attr('fill', '#111827')
+        .attr('opacity', 0.95);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    applyFilter();
+  });
+
+  window.addEventListener('resize', () => {
+    // đơn giản: gọi lại render
+    applyFilter();
+  });
+</script>
+{% endblock %}
+

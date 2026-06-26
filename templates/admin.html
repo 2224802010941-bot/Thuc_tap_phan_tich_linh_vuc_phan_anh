@@ -1,0 +1,382 @@
+{% extends "layout.html" %}
+{% block content %}
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+{% if message %}
+<div class="mb-4 px-4 py-3 rounded border text-sm {% if msg_type=='success' %}bg-green-100 border-green-300 text-green-800{% else %}bg-red-100 border-red-300 text-red-800{% endif %}">
+    {{ message }}
+</div>
+{% endif %}
+
+
+<div id="phong-ban-data-holder" class="hidden" data-phongban='{{ list_phong_ban | tojson }}'></div>
+
+<div class="flex flex-col lg:flex-row gap-6 mt-4">
+    
+    <div class="w-full lg:w-72 shrink-0 bg-white p-4 rounded-lg border border-gray-200 shadow-sm h-fit">
+        <h3 class="font-bold text-gray-700 text-sm mb-3 pb-2 border-b flex items-center gap-2">
+            🏢 Cơ Quan Tiếp Nhận
+        </h3>
+        <div class="space-y-2">
+            <a href="{{ url_for('page_admin') }}" class="block px-3 py-2.5 rounded text-xs font-semibold transition {% if not selected_phong_id %} bg-blue-600 text-white {% else %} text-gray-600 hover:bg-gray-100 {% endif %}">
+                📂 Tất cả phản ánh
+            </a>
+            
+            {% for pb_id, pb_ten in list_phong_ban %}
+            <a href="{{ url_for('page_admin', phong_id=pb_id) }}" 
+               id="nav-phong-{{ pb_id }}"
+               onclick="clearBadge('{{ pb_id }}')"
+               class="relative block px-3 py-3 rounded text-xs font-semibold transition flex justify-between items-center border {% if selected_phong_id == pb_id %} bg-blue-600 text-white border-blue-600 {% else %} text-gray-600 bg-gray-50 hover:bg-gray-100 border-gray-200 {% endif %}">
+                
+                <span class="truncate pr-4">{{ pb_ten }}</span>
+                
+                <span id="badge-phong-{{ pb_id }}" 
+                      data-count="0"
+                      class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-md animate-bounce hidden border border-white z-10">
+                    0
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="flex-1 space-y-4">
+        <div class="bg-white p-4 border border-gray-200 rounded-lg shadow-sm flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold text-gray-800">
+                    📂 {% if selected_phong_id %}Danh sách xử lý: <span class="text-blue-600">{% for p_id, p_ten in list_phong_ban %}{% if p_id == selected_phong_id %}{{ p_ten }}{% endif %}{% endfor %}</span>{% else %}Tổng hợp tất cả phản ánh toàn hệ thống{% endif %}
+                </h2>
+                <p class="text-xs text-gray-400 mt-0.5">Hệ thống tự động cập nhật và phân phối đơn thư theo thời gian thực.</p>
+            </div>
+            <button onclick="window.location.reload()" class="bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold py-1.5 px-3 rounded text-xs transition border flex items-center gap-1">
+                🔄 Tải lại trang
+            </button>
+        </div>
+
+        <div id="danh-sach-don-thu" class="space-y-4">
+            {% if not list_phan_anh %}
+            <div id="empty-state" class="bg-gray-50 text-center p-12 rounded-lg border border-dashed border-gray-300 text-gray-400 text-xs">
+                📭 Hiện tại không có phản ánh nào đang chờ xử lý tại mục này.
+            </div>
+            {% endif %}
+
+            {% for id, noi_dung, file_dinh_kem, dia_chi, ten_nguoi_gui, sdt, linh_vuc, sac_thai, do_khan_cap, trang_thai, phong_ban_id,ngay_gui in list_phan_anh %}
+            <div class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm flex flex-col md:flex-row justify-between gap-6 border-l-4 
+            {% if do_khan_cap is not none and do_khan_cap >= 4 %} 
+        border-l-red-500 
+    {% elif do_khan_cap is not none and do_khan_cap == 3 %} 
+        border-l-amber-500 
+    {% else %} 
+        border-l-blue-500 
+    {% endif %}">
+                
+                <div class="flex-1 space-y-2">
+                    <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span class="font-bold text-gray-400 text-xs">Đơn #{{ id }}</span>
+                        <span class="text-gray-500 italic"> {{ ngay_gui }}</span>
+                        <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-200">{{ linh_vuc }}</span>
+                        <span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-200">Sắc thái: {{ sac_thai }}</span>
+                        <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded font-bold border border-red-200">Khẩn cấp: Cấp {{ do_khan_cap }}</span>
+                        <span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-bold border border-amber-200 ml-auto">✨ {{ trang_thai }}</span>
+                    </div>
+                    
+                    <p class="text-gray-700 text-xs bg-gray-50 p-3 rounded font-medium border border-gray-100 leading-relaxed">{{ noi_dung }}</p>
+                    
+                    <div class="text-[11px] text-gray-500 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-2 rounded">
+                        <p>📍 <strong>Vị trí:</strong> {{ dia_chi }}</p>
+                        <p>👤 <strong>Người gửi:</strong> {{ ten_nguoi_gui }} (SĐT: {{ sdt }})</p>
+                    </div>
+                </div>
+                
+                <form method="POST" class="w-full md:w-64 bg-slate-50 p-3 rounded-lg border border-gray-200 flex flex-col justify-between gap-2 shrink-0">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="pa_id" value="{{ id }}">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1">Chuyển cơ quan phụ trách:</label>
+                        <select name="phong_ban_id" class="w-full bg-white border border-gray-300 p-1 rounded text-xs outline-none">
+                            <option value="">-- Văn phòng Tiếp dân --</option>
+                            {% for p_id, p_ten in list_phong_ban %}
+                            <option value="{{ p_id }}" {% if p_id == phong_ban_id %} selected {% endif %}>{{ p_ten }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1">Cập nhật tiến độ giải quyết:</label>
+                        <select name="trang_thai" class="w-full bg-white border border-gray-300 p-1 rounded text-xs outline-none">
+                            <option value="Chờ xử lý" {% if trang_thai == 'Chờ xử lý' %} selected {% endif %}>Chờ xử lý</option>
+                            <option value="Đang xử lý" {% if trang_thai == 'Đang xử lý' %} selected {% endif %}>Đang xử lý</option>
+                            <option value="Đã hoàn thành" {% if trang_thai == 'Đã hoàn thành' %} selected {% endif %}>Đã hoàn thành</option>
+                            <option value="Chuyển cấp" {% if trang_thai == 'Chuyển cấp' %} selected {% endif %}>Chuyển cấp</option>
+                            <option value="Trả về" {% if trang_thai == 'Trả về' %} selected {% endif %}>Trả về</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 text-white text-xs py-1.5 rounded font-bold hover:bg-emerald-700 transition">Cập Nhật Trạng Thái</button>
+                </form>
+
+                <form method="POST" class="w-full md:w-72 bg-red-50 p-3 rounded-lg border border-red-200 flex flex-col gap-2 shrink-0"
+                      onsubmit="return confirm('Xóa phản ánh này khỏi danh sách xử lý? Lý do sẽ được hiển thị cho người dân.');">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="pa_id" value="{{ id }}">
+                    <div>
+                        <label class="block text-[10px] font-bold text-red-700 mb-1">Lý do xóa phản ánh:</label>
+                        <select name="ly_do_xoa" class="w-full bg-white border border-red-200 p-1 rounded text-xs outline-none" required>
+                            <option value="">-- Chọn lý do --</option>
+                            <option value="Phản ánh bị trùng">Phản ánh bị trùng</option>
+                            <option value="Không thuộc phạm vi giải quyết">Không thuộc phạm vi giải quyết</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-red-700 mb-1">Giải thích cho người dân:</label>
+                        <textarea name="giai_thich_xoa" rows="3" class="w-full bg-white border border-red-200 p-2 rounded text-xs outline-none resize-none" placeholder="Nhập nội dung giải thích..." required></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700 transition">Xóa Phản Ánh</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Khai báo ngay dưới dòng const socket = io();
+    // Sửa dòng 113 thành:
+  
+    const dataHolder = document.getElementById('phong-ban-data-holder');
+    const listPhongBanData = JSON.parse(dataHolder.getAttribute('data-phongban') || '[]');
+    const phongIds = listPhongBanData.map(item => String(item[0]));
+    const socket = io();
+    const BADGE_STORAGE_KEY = 'admin_approved_badges';
+    localStorage.removeItem('phong_ban_badges');
+    const urlParams = new URLSearchParams(window.location.search);
+    const activePhongId = urlParams.get('phong_id'); // Giá trị id phòng ban đang mở (null nếu là Tất cả)
+
+    // Yêu cầu server thêm trình duyệt này vào Room phù hợp (chờ socket connect để tránh bỏ lỡ event)
+    socket.on('connect', function () {
+        if (activePhongId) {
+            socket.emit('join_room', { phong_id: activePhongId });
+        } else {
+            socket.emit('join_room', { phong_id: 'admin' }); // Đây là room 'admin_tong'
+        }
+    });
+
+    // Khởi tạo/Tải lại bộ đếm thông báo từ localStorage
+    function loadSavedBadges() {
+        const savedData = JSON.parse(localStorage.getItem(BADGE_STORAGE_KEY) || '{}');
+        Object.keys(savedData).forEach(id => {
+            // Không hiển thị chấm đỏ của phòng ban nếu cán bộ đang xem trực tiếp phòng đó
+            if (savedData[id] > 0 && id !== activePhongId) {
+                const badge = document.getElementById(`badge-phong-${id}`);
+                if (badge) {
+                    badge.setAttribute('data-count', savedData[id]);
+                    badge.innerText = savedData[id];
+                    badge.classList.remove('hidden');
+                }
+            }
+        });
+    }
+
+    // Hàm xóa số thông báo khi bấm chọn xem phòng ban
+    function clearBadge(id) {
+        const savedData = JSON.parse(localStorage.getItem(BADGE_STORAGE_KEY) || '{}');
+        savedData[id] = 0;
+        localStorage.setItem(BADGE_STORAGE_KEY, JSON.stringify(savedData));
+    }
+
+    // Nếu cán bộ đang ở phòng nào, xóa sạch chấm đỏ của phòng đó ngay
+    if (activePhongId) {
+        clearBadge(activePhongId);
+    }
+    // 3. Hàm tự kiểm tra và hiển thị lại badge khi trang được F5 hoặc chuyển trang
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedData = JSON.parse(localStorage.getItem(BADGE_STORAGE_KEY) || '{}');
+        Object.keys(savedData).forEach(phongId => {
+            const count = parseInt(savedData[phongId]);
+            const badge = document.getElementById(`badge-phong-${phongId}`);
+            if (badge && count > 0) {
+                badge.innerText = count;
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            }
+        });
+    });
+
+    loadSavedBadges();
+
+    // LẮNG NGHE SYNC BADGE TỪ SERVER (sau khi duyệt)
+    socket.on('badge_update_from_db', function(payload) {
+        try {
+            const countsByPhong = payload.counts_by_phong || {};
+            const raw = localStorage.getItem(BADGE_STORAGE_KEY);
+            const savedData = raw ? JSON.parse(raw) : {};
+
+            // Cập nhật tất cả badge theo DB; badge không có trong payload sẽ về 0
+            // const phongIds = [];
+            // {% for pb_id, pb_ten in list_phong_ban %}
+            //     phongIds.push(String('{{ pb_id }}'));
+            // {% endfor %}
+
+            phongIds.forEach((pid) => {
+                const count = countsByPhong[pid] !== undefined ? parseInt(countsByPhong[pid], 10) : 0;
+                const badge = document.getElementById(`badge-phong-${pid}`);
+                if (badge) {
+                    badge.setAttribute('data-count', count);
+                    badge.innerText = count;
+                    if (count > 0) {
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+                savedData[pid] = count;
+            });
+
+            localStorage.setItem(BADGE_STORAGE_KEY, JSON.stringify(savedData));
+        } catch (e) {
+            console.error('LỖI CẬP NHẬT BADGE TỪ DB:', e);
+        }
+    });
+
+    // LẮNG NGHE ĐƠN MỚI TỪ SERVER GỬI XUỐNG
+    socket.on('thong_bao_don_moi', function(data) {
+        console.log("Hệ thống nhận đơn thư mới:", data);
+        const targetPhongId = String(data.phong_ban_id);
+
+        // 🌟 BƯỚC 1: CẬP NHẬT CHẤM ĐỎ (BADGE) - cập nhật 1 lần duy nhất
+        const badge = document.getElementById(`badge-phong-${targetPhongId}`);
+        if (badge) {
+            let count = parseInt(badge.getAttribute('data-count') || 0, 10) + 1;
+            badge.setAttribute('data-count', count);
+            badge.innerText = count;
+            badge.classList.remove('hidden');
+            badge.classList.add('flex');
+
+            const savedData = JSON.parse(localStorage.getItem(BADGE_STORAGE_KEY) || '{}');
+            savedData[targetPhongId] = count;
+            localStorage.setItem(BADGE_STORAGE_KEY, JSON.stringify(savedData));
+        } else {
+            console.warn(`Không tìm thấy badge cho ID: ${targetPhongId}`);
+        }
+           window.dispatchEvent(new Event('storage'));
+
+        // 🌟 BƯỚC 2: HIỂN THỊ THÔNG BÁO TRÌNH DUYỆT (BROWSER NOTIFICATION)
+        // Mục tiêu: khi nào có phản ánh mới thì luôn thông báo (kể cả đang ở phòng nào khác).
+      if (Notification.permission === "granted") {
+    console.log("Đang thử gửi thông báo...");
+    try {
+        new Notification("🚨 Có phản ánh mới cần xử lý!", {
+            body: `Đơn #${data.id}: ${data.noi_dung.substring(0, 50)}...`,
+            tag: "pa_" + data.id,
+            renotify: true,
+            requireInteraction: true
+        });
+    } catch (err) {
+        console.error("Lỗi khi tạo Notification:", err);
+    }
+} else if (Notification.permission !== "denied") {
+    console.log("Chưa có quyền, đang yêu cầu quyền...");
+    Notification.requestPermission();
+}
+
+        // 🌟 BƯỚC 1: BẤT KỂ ĐANG Ở ĐÂU, PHẢI TĂNG SỐ ĐẾM CHẤM ĐỎ CHO PHÒNG BAN ĐÍCH
+        // Chỉ miễn trừ trường hợp cán bộ đang mở xem trực tiếp chính phòng ban đó
+    
+
+        //# 🌟 BƯỚC 2: CHỈ TỰ ĐỘNG CHÈN ĐƠN VÀO KHUNG BÊN PHẢI KHI ĐANG ĐỨNG Ở ĐÚNG PHÒNG ĐÓ
+        //# Nếu đang ở tab "Tất cả phản ánh" hoặc phòng ban khác, KHÔNG tự chèn đơn, bắt buộc cán bộ click vào phòng ban mới thấy
+        if (activePhongId === targetPhongId) {
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) emptyState.classList.add('hidden');
+
+            let borderClass = "border-l-blue-500";
+            if (data.do_khan_cap >= 4) borderClass = "border-l-red-500";
+            else if (data.do_khan_cap == 3) borderClass = "border-l-amber-500";
+
+            const newCard = document.createElement('div');
+            newCard.className = `bg-amber-50 border border-gray-200 rounded-lg p-5 shadow-md flex flex-col md:flex-row justify-between gap-6 border-l-4 ${borderClass} transition duration-500`;
+            
+            const rawPhongBan = listPhongBanData;
+            
+            let optionsHtml = '<option value="">-- Văn phòng Tiếp dân --</option>';
+            rawPhongBan.forEach(function(item) {
+                let pId = parseInt(item[0]);
+                let pTen = item[1];
+                let selectedAttr = (data.phong_ban_id === pId) ? 'selected' : '';
+                optionsHtml += `<option value="${pId}" ${selectedAttr}>${pTen}</option>`;
+            });
+
+            newCard.innerHTML = `
+                <div class="flex-1 space-y-2">
+                    <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span class="font-bold text-red-600 text-xs">Đơn mới #${data.id} 🆕</span>
+                        <span class="text-gray-500 italic">📅 ${data.ngay_gui}</span>
+                        <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-200">Định tuyến tự động</span>
+                        <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded font-bold border border-red-200">Khẩn cấp: Cấp ${data.do_khan_cap}</span>
+                        <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold ml-auto text-xs">📌 Chờ xử lý</span>
+                    </div>
+                    <p class="text-gray-700 text-xs bg-white p-3 rounded font-medium border border-gray-200 leading-relaxed">${data.noi_dung}</p>
+                </div>
+                <form method="POST" class="w-full md:w-64 bg-white p-3 rounded-lg border border-gray-200 flex flex-col justify-between gap-2 shrink-0">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="pa_id" value="${data.id}">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1">Chuyển cơ quan phụ trách:</label>
+                        <select name="phong_ban_id" class="w-full bg-white border border-gray-300 p-1 rounded text-xs outline-none">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1">Cập nhật tiến độ giải quyết:</label>
+                        <select name="trang_thai" class="w-full bg-white border border-gray-300 p-1 rounded text-xs outline-none">
+                            <option value="Chờ xử lý" selected>Chờ xử lý</option>
+                            <option value="Đang xử lý">Đang xử lý</option>
+                            <option value="Đã hoàn thành">Đã hoàn thành</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 text-white text-xs py-1.5 rounded font-bold hover:bg-emerald-700 transition">Cập Nhật Trạng Thái</button>
+                </form>
+                <form method="POST" class="w-full md:w-72 bg-red-50 p-3 rounded-lg border border-red-200 flex flex-col gap-2 shrink-0"
+                      onsubmit="return confirm('Xóa phản ánh này khỏi danh sách xử lý? Lý do sẽ được hiển thị cho người dân.');">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="pa_id" value="${data.id}">
+                    <div>
+                        <label class="block text-[10px] font-bold text-red-700 mb-1">Lý do xóa phản ánh:</label>
+                        <select name="ly_do_xoa" class="w-full bg-white border border-red-200 p-1 rounded text-xs outline-none" required>
+                            <option value="">-- Chọn lý do --</option>
+                            <option value="Phản ánh bị trùng">Phản ánh bị trùng</option>
+                            <option value="Không thuộc phạm vi giải quyết">Không thuộc phạm vi giải quyết</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-red-700 mb-1">Giải thích cho người dân:</label>
+                        <textarea name="giai_thich_xoa" rows="3" class="w-full bg-white border border-red-200 p-2 rounded text-xs outline-none resize-none" placeholder="Nhập nội dung giải thích..." required></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700 transition">Xóa Phản Ánh</button>
+                </form>
+            `;
+
+            const container = document.getElementById('danh-sach-don-thu');
+            container.insertBefore(newCard, container.firstChild);
+        }
+    });
+    window.addEventListener('storage', function(event) {
+    // Lấy dữ liệu mới nhất từ localStorage
+    const savedData = JSON.parse(localStorage.getItem(BADGE_STORAGE_KEY) || '{}');
+    
+    // Cập nhật lại giao diện của các chấm đỏ
+    Object.keys(savedData).forEach(phongId => {
+        const count = parseInt(savedData[phongId]);
+        const badge = document.getElementById(`badge-phong-${phongId}`);
+        if (badge) {
+            if (count > 0) {
+                badge.innerText = count;
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
