@@ -223,6 +223,9 @@ YÊU CẦU ĐẦU RA:
     model="gemini-2.5-flash",
     contents=prompt
 )
+            print("========== GEMINI RESPONSE ==========")
+            print(response.text)
+            print("=====================================")
             raw_content = response.text.strip()        
             ai_data = normalize_ai_data(json.loads(raw_content))
         except Exception:
