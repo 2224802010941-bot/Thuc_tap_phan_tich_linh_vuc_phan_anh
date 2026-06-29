@@ -1,5 +1,5 @@
-# import eventlet
-# eventlet.monkey_patch()
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO, emit
 import sqlite3
@@ -144,7 +144,7 @@ DANH MỤC LĨNH VỰC (Chỉ được chọn 1):
 - "Văn hóa xã hội": Lối sống, an sinh, tệ nạn, tranh chấp hàng xóm.
 - "Giáo dục": Trường lớp, lạm thu, bạo lực học đường.
 - "Môi trường": Rác thải, Ô nhiễm không khí, Ô nhiễm nguồn nước, Mùi hôi, Chó mèo phóng uế, Động vật hoang dã, Chất thải công nghiệp, Sự cố môi trường,tiếng ồn vượt ngưỡng (từ cơ sở sản xuất).
-r
+
 
 YÊU CẦU ĐẦU RA:
 - Trích xuất mảng từ khóa tại 'tu_khoa'.
@@ -1154,8 +1154,8 @@ def duyet_ho_so():
             pid = int(phong_ban_id) if phong_ban_id is not None else 0
             counts_by_phong[str(pid)] = int(cnt)
 
-        # Gửi cho tất cả admin đang mở (room tổng)
-        pass
+    # Gửi cho tất cả admin đang mở (room tổng)
+        socketio.emit('badge_update_from_db', {'counts_by_phong': counts_by_phong}, room='admin_tong')
     except Exception as e:
         print(f"LỖI SYNC BADGE: {e}")
 
